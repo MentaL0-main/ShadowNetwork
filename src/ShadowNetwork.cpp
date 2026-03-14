@@ -1,16 +1,21 @@
 #include <ShadowNetwork/ShadowNetwork.hpp>
 
+#include <ShadowNetwork/socket.hpp>
+
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #include <ostream>
+#include <poll.h>
 #include <stdexcept>
 #include <string.h>
 #include <string>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <vector>
 
 #include <curl/curl.h>
 
@@ -20,7 +25,12 @@ void ShadowNetwork::run() {
   choose_white_address();
   init_tun();
   activate_tun("10.0.0.5");
-  start_polling();
+
+  int sock_fd = socket_.connect_to_server("", 443);
+  if (sock_fd < 0)
+    return;
+
+  start_proxy(sock_fd);
 }
 
 void ShadowNetwork::choose_white_address() {
@@ -104,6 +114,55 @@ void ShadowNetwork::start_polling() {
 
     std::cout << "Read " << nread << " bytes. IP Version: " << (buffer[0] >> 4)
               << std::endl;
+  }
+}
+
+void ShadowNetwork::start_proxy(int sock_fd) {
+  pollfd fds[2];
+  fds[0].fd = tun_fd_;
+  fds[0].events = POLLIN;
+  fds[1].fd = sock_fd;
+  fds[1].events = POLLIN;
+
+  std::vector<uint8_t> buffer(2048);
+
+  std::cout << "[*] Proxy loop started..." << std::endl;
+
+  while (true) {
+    int ret = poll(fds, 2, -1);
+    if (ret < 0) {
+      perror("poll");
+      break;
+    }
+
+    if (fds[0].revents & POLLIN) {
+      ssize_t nread = read(tun_fd_, buffer.data(), buffer.size());
+      if (nread > 0) {
+        uint16_t len = htons((uint16_t)nread);
+        socket_.write_all(sock_fd, &len, 2);
+        socket_.write_all(sock_fd, buffer.data(), nread);
+      }
+    }
+
+    if (fds[1].revents & POLLIN) {
+      uint16_t len_net;
+      if (socket_.read_all(sock_fd, &len_net, 2) <= 0)
+        break;
+
+      uint16_t len = ntohs(len_net);
+      if (len > buffer.size())
+        buffer.resize(len);
+
+      if (socket_.read_all(sock_fd, buffer.data(), len) > 0) {
+        write(tun_fd_, buffer.data(), len);
+      }
+    }
+
+    if (fds[0].revents & (POLLHUP | POLLERR) ||
+        fds[1].revents & (POLLHUP | POLLERR)) {
+      std::cout << "[!] Connection closed" << std::endl;
+      break;
+    }
   }
 }
 

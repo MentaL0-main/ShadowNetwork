@@ -14,7 +14,8 @@ endif()
 
 set(PROJECT_SOURCES
     src/main.cpp
-    src/ShadowNetwork.cpp
+    src/socket.cpp
+    src/ShadowNetwork.cpp  
 )
 
 find_package(CURL REQUIRED)
