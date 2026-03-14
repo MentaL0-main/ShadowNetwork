@@ -107,10 +107,6 @@ void ShadowNetwork::start_polling() {
 
   while (true) {
     size_t nread = read(tun_fd_, buffer, sizeof(buffer));
-    if (nread < 0) {
-      perror("read");
-      break;
-    }
 
     std::cout << "Read " << nread << " bytes. IP Version: " << (buffer[0] >> 4)
               << std::endl;

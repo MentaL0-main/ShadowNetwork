@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <cstdio>
+#include <iostream>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -10,6 +11,7 @@
 namespace sn {
 
 int Socket::connect_to_server(const char *ip, int port) {
+  std::cout << "[*] Connecting..." << std::flush;
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   sockaddr_in addr;
   addr.sin_family = AF_INET;
@@ -20,6 +22,8 @@ int Socket::connect_to_server(const char *ip, int port) {
     perror("connect");
     return -1;
   }
+
+  printf("OK: Connected\n");
 
   return sock;
 }
