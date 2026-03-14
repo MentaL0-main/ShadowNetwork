@@ -19,6 +19,8 @@ namespace sn {
 void ShadowNetwork::run() {
   choose_white_address();
   init_tun();
+  activate_tun("10.0.0.5");
+  start_polling();
 }
 
 void ShadowNetwork::choose_white_address() {
@@ -56,12 +58,12 @@ void ShadowNetwork::init_tun() {
     throw std::runtime_error("Failed to open /dev/net/tun");
   }
 
-  std::string tun_name = "tun%d";
+  tun_name_ = "tun%d";
 
   memset(&ifr, 0, sizeof(ifr));
   ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
-  if (tun_name.c_str()) {
-    strncpy(ifr.ifr_name, tun_name.c_str(), IFNAMSIZ);
+  if (tun_name_.c_str()) {
+    strncpy(ifr.ifr_name, tun_name_.c_str(), IFNAMSIZ);
   }
 
   if ((err = ioctl(tun_fd_, TUNSETIFF, (void *)&ifr)) < 0) {
@@ -69,8 +71,40 @@ void ShadowNetwork::init_tun() {
     throw std::runtime_error("Error ioctl TUNSETIFF. Maybe try with root?");
   }
 
-  tun_name = ifr.ifr_name;
-  std::cout << "OK: " << tun_name << std::endl;
+  tun_name_ = ifr.ifr_name;
+  std::cout << "OK: " << tun_name_ << std::endl;
+}
+
+void ShadowNetwork::activate_tun(const std::string &ip_addr) {
+  std::cout << "[*] Activating tun interface..." << std::flush;
+  std::string up_cmd = "ip link set " + tun_name_ + " up";
+  if (system(up_cmd.c_str()) != 0) {
+    throw std::runtime_error("Failed to UP tun");
+  }
+
+  std::string addr_cmd = "ip addr add " + ip_addr + "/24 dev " + tun_name_;
+  if (system(addr_cmd.c_str()) != 0) {
+    throw std::runtime_error("Failed to set IP");
+  }
+
+  std::cout << "OK: Interface " << tun_name_ << " is UP with IP " << ip_addr
+            << std::endl;
+}
+
+void ShadowNetwork::start_polling() {
+  unsigned char buffer[2048];
+  std::cout << "[*] Waiting packets..." << std::endl;
+
+  while (true) {
+    size_t nread = read(tun_fd_, buffer, sizeof(buffer));
+    if (nread < 0) {
+      perror("read");
+      break;
+    }
+
+    std::cout << "Read " << nread << " bytes. IP Version: " << (buffer[0] >> 4)
+              << std::endl;
+  }
 }
 
 bool ShadowNetwork::try_connect(const std::string &url) {
@@ -81,7 +115,7 @@ bool ShadowNetwork::try_connect(const std::string &url) {
 
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
-  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 1L);
 
   CURLcode res = curl_easy_perform(curl);
   long response_code = 0;
