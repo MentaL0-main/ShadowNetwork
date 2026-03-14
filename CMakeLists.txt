@@ -14,11 +14,15 @@ endif()
 
 set(PROJECT_SOURCES
     src/main.cpp
-    src/socket.cpp
-    src/packet.cpp
+    src/ShadowNetwork.cpp
 )
 
+find_package(CURL REQUIRED)
+
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${CURL_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
 
 target_include_directories(${PROJECT_NAME} PRIVATE include)
 
