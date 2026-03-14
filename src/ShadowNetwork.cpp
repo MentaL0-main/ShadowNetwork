@@ -26,7 +26,7 @@ void ShadowNetwork::run() {
   init_tun();
   activate_tun("10.0.0.5");
 
-  int sock_fd = socket_.connect_to_server("", 443);
+  int sock_fd = socket_.connect_to_server("127.0.0.1", 4433);
   if (sock_fd < 0)
     return;
 
